@@ -1,0 +1,435 @@
+
+-----------------------// VARIABLES //------------------------------------------------------------
+local players = game:GetService("Players")
+local localPlayer = players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid") ::Humanoid
+local Animator = humanoid:WaitForChild("Animator") ::Animator
+local Hrp = character:WaitForChild("HumanoidRootPart") ::BasePart
+local hrpY = nil
+local velocityY = Hrp.AssemblyLinearVelocity.Y
+local velocityFov = false
+
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+
+
+local SprintAnim = script.Parent.Parent.Anims.Sprint
+local LfallAnim = script.Parent.Parent.Anims.LightFall
+local rollAnim = script.Parent.Parent.Anims.Roll
+local SprintJumpAnim = script.Parent.Parent.Anims.SprintJump
+local fallingAnim = script.Parent.Parent.Anims.Falling
+local VaultingAnim = script.Parent.Parent.Anims.Vaulting
+local VaultboostAnim =script.Parent.Parent.Anims.VaultBoost
+local MantleAnim = script.Parent.Parent.Anims.Mantle
+local dropKickAnim = script.Parent.Parent.Anims.DropKick
+
+local SprintTrack = Animator:LoadAnimation(SprintAnim)
+local LfallTrack = Animator:LoadAnimation(LfallAnim)
+local RollTrack = Animator:LoadAnimation(rollAnim)
+local SprintJumpTrack = Animator:LoadAnimation(SprintJumpAnim)
+local fallingTrack = Animator:LoadAnimation(fallingAnim)
+local valutingTrack = Animator:LoadAnimation(VaultingAnim)
+local vaultboostTrack = Animator:LoadAnimation(VaultboostAnim)
+local mantleTrack = Animator:LoadAnimation(MantleAnim)
+local DropkickTrack = Animator:LoadAnimation(dropKickAnim)
+
+
+local freeFallingAudio = script.Parent.Parent.Sounds.FallingSounds.FreefallingSound
+local falldamage1 = script.Parent.Parent.Sounds.FallingSounds.FallDamage1
+local falldamageDeath = script.Parent.Parent.Sounds.FallingSounds.FallDamageDeath
+local RollSound = script.Parent.Parent.Sounds.FallingSounds.Roll
+local highAltitudeWindSound = script.Parent.Parent.Sounds.Ambience.HighAltitude.WIndForHighAltitude
+local vaultSound = script.Parent.Parent.Sounds.ParkourSounds.vault
+local vaultboostSound = script.Parent.Parent.Sounds.ParkourSounds.vaultboost
+local dropkickSound = script.Parent.Parent.Sounds.DropKick.Hit
+local dropkickSwing = script.Parent.Parent.Sounds.DropKick.Swing
+
+
+local Stats = require(script.Parent)
+local FovModule = require(game.ReplicatedStorage.FovManager)
+
+humanoid.UseJumpPower = true
+
+local VaultTween = nil :: Tween
+-----------------------------------------------------------------------------------------------
+
+
+
+
+
+RunService.Stepped:Connect(function(time,deltaTime)
+	
+	--------------------------------------------------------// Tween Fixing //---------------------------------------------------------------------------------------
+	local VaultTweeninfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
+	local Goal = {
+		CFrame = Hrp.CFrame * CFrame.new(0,2.5,-9) + Hrp.CFrame.LookVector
+	}
+	 VaultTween = TweenService:Create(Hrp,VaultTweeninfo,Goal)
+	
+	---------------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {character , Hrp}
+	local hrpdirection = Hrp.CFrame.LookVector * 8
+	
+	
+	
+	local headResult = workspace:Raycast(Hrp.Position + Vector3.new(0,2.6,0),Hrp.CFrame.LookVector * 6,params)
+	local aboveHeadResult = workspace:Raycast(Hrp.Position + Vector3.new(0,5,0),Hrp.CFrame.LookVector * 6 ,params)
+	local VaultParamHead = workspace:Raycast(Hrp.Position + Vector3.new(0,2.6,0),Hrp.CFrame.LookVector * 5.4,params)
+	local VaultParamAboveHead = workspace:Raycast(Hrp.Position + Vector3.new(0,5,0),Hrp.CFrame.LookVector * 3.5 ,params)
+	local HipResult = workspace:Raycast(Hrp.Position,hrpdirection,params)
+	
+	if HipResult and not headResult and not aboveHeadResult and not VaultParamHead and not VaultParamAboveHead and Stats.isInAir == false and Stats.isVaulting == false and Stats.isMantleing == false then 
+		Stats.isVaultable = true
+	else
+		Stats.isVaultable = false
+	end
+	
+	if headResult and not aboveHeadResult and Stats.isInAir == true and Stats.isVaulting == false and Stats.isMantleing == false then
+		Stats.isMantleable = true
+	else
+		Stats.isMantleable = false
+	end
+	
+	Stats.Char = character
+	Stats.Humanoid = humanoid
+	Stats.Hrp = Hrp
+	Stats.localPlayer = localPlayer
+	Stats.HrpCFrame = Hrp.CFrame
+	
+	
+	humanoid.Health = Stats.Health
+	humanoid.WalkSpeed = Stats.Speed
+	humanoid.JumpPower = Stats.Jump
+	Stats.Position = Hrp.CFrame.Position
+	hrpY = Hrp.CFrame.Position.Y
+	velocityY = Hrp.AssemblyLinearVelocity.Y
+
+	
+	print(Stats.isMantleable)
+	---------------------------------------------// Falling FOV //-----------------------------------------------------------------------
+	if velocityY < -100 then
+		if velocityFov == false then
+			Stats.isFOVhigh = false
+			FovModule.resetFOV(0.1)
+			Stats.isFOVhigh = true
+			velocityFov = true
+			FovModule.createNewFOV(2.5, 99)
+			Stats.isFOVhigh = true
+			freeFallingAudio:Play()
+			fallingTrack:Play()
+			
+			
+		end
+	end
+	if velocityY > -100 then
+		if Stats.isFOVhigh == true and velocityFov == true then
+			
+			Stats.isFOVhigh = false
+			velocityFov = false
+			FovModule.resetFOV(1.5)
+			freeFallingAudio:Stop()
+			fallingTrack:Stop()
+		end
+	end
+
+	------------------//Sprint Related //-----------------------------------------------------------------------------------
+	if Stats.Stamina <= 0 then -- if stamine reaches 0 then stop running
+		if Stats.isFOVhigh == true then
+			
+			FovModule.resetFOV(1)
+			Stats.isFOVhigh = false
+		end
+		print("no stamina")
+		SprintTrack:Stop()
+		Stats.isSprinting = false
+		Stats.Speed = 16
+		Stats.Jump = 50
+	end
+	
+	if Stats.isSprinting == true then  -- if is running then more speed and drain stamina
+		Stats.Speed = Stats.SprintSpeed
+        Stats.Stamina -= Stats.StaminaDrain * deltaTime
+	end
+	
+	
+	if Stats.isSprinting == false then
+		
+		if Stats.Stamina > Stats.MaxStamina then -- if stamina is more than max then set it to max
+			Stats.Stamina = Stats.MaxStamina
+		end
+		
+		if Stats.Stamina < Stats.MaxStamina then  -- if stamina is less than max then regen stamina
+			Stats.Stamina += Stats.StaminaRegen * deltaTime
+		end
+	end
+	
+	--print( Stats.isSprinting)
+	--print(Stats.Stamina) -- made to check stamina when debugging
+	------------------------------------------------------------------------------------------------------------------------------------
+end)
+
+
+---------------------------------//Running (Dart)//-----------------------------------------------------------------------------
+
+UIS.InputBegan:Connect(function(input , gpe)
+	if gpe then return end
+	
+	if input.KeyCode == Enum.KeyCode.LeftShift and Stats.isSprinting == false and Stats.Stamina > 0 then  -- start sprint
+		Stats.isSprinting = true
+		Stats.Jump = 80
+		if Stats.Stamina >0 and Stats.isSprinting == true then
+			SprintTrack:Play()
+		end
+		if  Stats.Stamina <0  or  Stats.isSprinting == false then
+			SprintTrack:Stop()
+		end	
+		print("running")
+		if Stats.isFOVhigh == false then
+			FovModule.createNewFOV(1, 80)
+			Stats.isFOVhigh = true
+		end
+	end
+end)
+
+UIS.InputEnded:Connect(function(input , gpe)
+	if gpe then return end
+
+	if input.KeyCode == Enum.KeyCode.LeftShift and  Stats.isSprinting == true  then  -- stop sprint
+		SprintTrack:stop()
+		if Stats.isFOVhigh == true then
+			FovModule.resetFOV(1)
+			Stats.isFOVhigh = false
+		end
+		Stats.isSprinting = false
+		Stats.Speed = Stats.DefaultSpeed
+		Stats.Jump = 50
+		print("not running")
+		
+	end
+end)
+
+humanoid.jumping:Connect(function()
+	if Stats.isSprinting == true and Stats.isInAir == false  then
+		SprintJumpTrack:Play()
+	end
+end)
+humanoid.StateChanged:Connect(function(oldState, NewState)
+	if NewState == Enum.HumanoidStateType.Landed then
+		SprintJumpTrack:Stop()
+	end
+end)
+
+-----------------------------------------------------------------------------// Falling //----------------------------------------------------------------------------------------------------------------
+
+
+local startY = nil   
+local endY =nil
+
+local maxFallDistance = 14
+local maxRollDistance = 110
+
+
+humanoid.StateChanged:Connect(function(oldState, NewState)
+	if NewState == Enum.HumanoidStateType.Freefall then
+
+		if Stats.isInAir == false then
+			Stats.isInAir = true
+		end
+		startY = hrpY
+	end
+end)
+
+humanoid.StateChanged:Connect(function(oldState, NewState)
+	if NewState ~= Enum.HumanoidStateType.Freefall and Stats.isInAir == true then
+		endY = hrpY
+		if Stats.isInAir == true then
+			Stats.isInAir = false
+		end
+		
+	
+		if Stats.isRolling == true  and startY - endY > maxFallDistance then
+			if  startY - endY > maxRollDistance then
+			   Stats.isRolling = false
+			   RollTrack:Stop()
+			   fallingTrack:Stop()
+			
+			else
+				fallingTrack:Stop()
+				RollTrack:Play()
+				RollTrack:AdjustSpeed(1.33)
+				RollSound:Play()
+				falldamage1:Play()
+				print("SuccesfulRoll")
+			end
+
+		end
+		
+	
+		if Stats.isRolling == false and (startY - endY) > maxFallDistance  then
+			if (startY - endY) * 0.5 > Stats.Health then
+				Stats.Health -= (startY - endY) * 0.5
+				falldamageDeath:Play()
+				freeFallingAudio:Stop()
+			end
+			
+			if (startY - endY) * 0.5 < Stats.Health then
+				Stats.isSprinting = false
+				Stats.Speed = 16
+				SprintTrack:Stop()
+				Stats.Health -= (startY - endY) * 0.5
+				fallingTrack:Stop()
+				falldamage1:Play()
+				freeFallingAudio:Stop()
+				humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+				LfallTrack:play()
+				Stats.Speed = 1
+				task.wait(1)
+				Stats.Speed = 16
+				humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+
+			end
+			
+		    
+		end
+		
+		
+		startY = nil
+		endY = nil
+	end
+end)
+
+-- un related FOV rise When falling
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- make wind sounds if high altitude
+
+--if hrpY.Position.Y >= 350 then
+--    highAltitudeWindSound:Play()
+--end
+--if hrpY.Position.Y then
+--	highAltitudeWindSound:Stop()
+--end
+-----------------------------------------------------// Rolling //---------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+local db = true
+
+UIS.InputBegan:Connect(function(input,gpe)
+	if gpe then return end
+	
+	if input.KeyCode == Enum.KeyCode.C and db == true and Stats.isRolling == false  then
+		db = false
+		Stats.isRolling = true
+		task.wait(0.8)
+		Stats.isRolling = false
+		task.wait(0.3)
+		db = true
+		
+		
+	end
+end)
+
+
+-------------------------------------------------------------// Vaulting //-------------------------------------------------------------------------------------------------------------------------------------------
+
+UIS.InputBegan:Connect(function(input,gpe)
+	if gpe then return end
+	if Stats.isVaultable == true and input.KeyCode == Enum.KeyCode.Space  then
+		Stats.isVaulting = true
+		Hrp.Anchored = true
+		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		--Hrp.CFrame = Hrp.CFrame * CFrame.new(0,0,-15)
+		VaultTween:Play()
+		valutingTrack:Play()
+		valutingTrack:AdjustSpeed(1.44)
+		vaultSound:Play()
+		VaultTween.Completed:Connect(function()
+			Hrp.Anchored = false
+			humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+			Stats.isVaulting = false
+		end)
+
+		
+	end
+		
+end)
+
+local isBoosting = false
+local isJboosting = false
+UIS.InputBegan:Connect(function(input , gpe)
+	if gpe then return end
+	if Stats.isVaulting == true and input.KeyCode == Enum.KeyCode.E and isBoosting == false and isJboosting == false then
+	
+		isBoosting = true
+		Hrp.AssemblyLinearVelocity = Hrp.CFrame.LookVector * 110 + Vector3.new(0,67,0)
+		vaultboostTrack:Play()
+		vaultboostSound:Play()
+		print("boosted")
+		task.wait(0.5)
+		isBoosting = false
+	end
+		
+	
+end)
+
+
+UIS.InputBegan:Connect(function(input , gpe)
+	if gpe then return end
+	if Stats.isVaulting == true and input.KeyCode == Enum.KeyCode.Space and isBoosting == false and isJboosting == false then
+		isJboosting = true
+		Hrp.AssemblyLinearVelocity = Hrp.CFrame.LookVector * 45 + Vector3.new(0,110,0)
+		vaultboostTrack:Play()
+		vaultboostSound:Play()
+		print("boosted")
+		task.wait(0.5)
+		isJboosting = false
+	end
+
+
+end)
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------// Mantleing //-------------------------------------------------------------------------------------------------------------------------------------------------
+
+UIS.InputBegan:Connect(function(input , gpe)
+	if gpe then return end
+	if input.KeyCode == Enum.KeyCode.Space and Stats.isVaulting == false and Stats.isMantleing == false and Stats.isVaultable == false  and Stats.isMantleable == true then
+		Stats.isMantleing = true
+		Hrp.Anchored = true
+		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		mantleTrack:Play()
+	end
+end)
+
+
+UIS.InputBegan:Connect(function(input , gpe)
+	if gpe then return end
+	if input.KeyCode == Enum.KeyCode.Space and Stats.isMantleing == true then
+        Stats.isMantleing = false
+		Hrp.Anchored = false
+		humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+		Hrp.AssemblyLinearVelocity =Hrp.CFrame.LookVector * 30 + Vector3.new(0,80,0)
+		mantleTrack:Stop()
+	end
+end)
+---------------------------------------------------------------------// DropKick //-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+local remote = game.ReplicatedStorage.DropKick
+UIS.InputBegan:Connect(function(input , gpe)
+	if gpe then return end
+	if input.KeyCode == Enum.KeyCode.E and Stats.isInAir == true and Stats.isMantleing == false and Stats.isVaulting == false and Stats.isDropKicking == false then
+		
+		DropkickTrack:Play()
+		remote:FireServer( Stats , Hrp.Position , Hrp.CFrame.LookVector,dropkickSound , character)
+		task.wait(0.1)
+		dropkickSwing:Play()
+	end
+        
+end)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
